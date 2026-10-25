@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>오므라이스에 케첩으로 그리기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cute+Font&family=Gaegu:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cloth: #f4f8fd;
+    --ink: #3b2416;
+    --paper: #fff8e7;
+    --line: #e3d3b0;
+    --ketchup: #d9291c;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--cloth);
+    color: var(--ink);
+    font-family: "Gaegu", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    display: flex;
+    justify-content: center;
+  }
+  .wrap {
+    width: 100%;
+    max-width: 1040px;
+    padding: 18px 16px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+  h1 {
+    margin: 0;
+    font-family: "Cute Font", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    font-weight: 400;
+    font-size: clamp(30px, 5vw, 46px);
+    letter-spacing: 0.01em;
+    text-align: center;
+  }
+
+  .stage {
+    position: relative;
+    width: min(100%, 1000px, calc((100vh - 210px) * 1.3889));
+    min-width: 280px;
+    aspect-ratio: 1000 / 720;
+    border-radius: 22px;
+    overflow: hidden;
+    box-shadow: 0 0 0 4px #fff, 0 0 0 6px var(--line);
+  }
+  .stage canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  #live { cursor: crosshair; touch-action: none; }
+  .hint {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    margin: 0;
+    padding: 0 12px;
+    text-align: center;
+    font-family: "Cute Font", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    font-size: clamp(20px, 3.2vw, 32px);
+    line-height: 1.4;
+    color: rgba(110, 60, 10, 0.55);
+    pointer-events: none;
+    transition: opacity .25s;
+  }
+  .hint.gone { opacity: 0; }
+
+  .bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 10px 18px;
+    padding: 10px 16px;
+    background: var(--paper);
+    border: 2px solid var(--line);
+    border-radius: 999px;
+  }
+  .group { display: flex; align-items: center; gap: 8px; }
+  .group > span { font-size: 18px; font-weight: 700; }
+
+  .sauce {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px 6px 8px;
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 18px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .sauce i {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 2px solid rgba(0,0,0,.25);
+    background: var(--c);
+  }
+  .sauce[aria-pressed="true"] { border-color: var(--ink); background: #fff; }
+
+  input[type="range"] { width: 120px; accent-color: var(--ketchup); }
+
+  .btn {
+    padding: 8px 14px;
+    border: 2px solid var(--ink);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--ink);
+    font: inherit;
+    font-size: 18px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .btn:hover:not(:disabled) { background: #ffeecb; }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .btn.primary { background: var(--ketchup); border-color: #8c150d; color: #fff; }
+  .btn.primary:hover { background: #bf2015; }
+
+  button:focus-visible, input:focus-visible { outline: 3px solid #2b6cd4; outline-offset: 2px; }
+
+  @media (max-width: 560px) {
+    .bar { border-radius: 24px; }
+    input[type="range"] { width: 90px; }
+  }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <h1>오므라이스에 케첩으로 그리기</h1>
+
+  <div class="stage" id="stage">
+    <canvas id="base"></canvas>
+    <canvas id="ink"></canvas>
+    <canvas id="live" aria-label="오므라이스 그림판"></canvas>
+    <p class="hint" id="hint">접시 위를 눌러 그려 보세요<br>천천히 그으면 케첩이 굵게 나와요</p>
+  </div>
+
+  <div class="bar">
+    <div class="group" role="group" aria-label="소스 고르기">
+      <button class="sauce" data-sauce="ketchup" aria-pressed="true" style="--c:#d9291c"><i></i>케첩</button>
+      <button class="sauce" data-sauce="mayo" aria-pressed="false" style="--c:#fff7e0"><i></i>마요네즈</button>
+      <button class="sauce" data-sauce="demi" aria-pressed="false" style="--c:#5a2c17"><i></i>데미글라스</button>
+    </div>
+    <label class="group">
+      <span>굵기</span>
+      <input type="range" id="size" min="6" max="28" value="14">
+    </label>
+    <div class="group">
+      <button class="btn" id="undo" disabled>되돌리기</button>
+      <button class="btn" id="clear" disabled>모두 지우기</button>
+      <button class="btn primary" id="save">그림 저장</button>
+    </div>
+  </div>
+</main>
+
+<script>
+(() => {
+  const W = 1000, H = 720;
+  const SAUCES = {
+    ketchup: { edge: '#9e1a12', body: '#d9291c', hi: '#ff7360' },
+    mayo:    { edge: '#d6c9a6', body: '#fff7e0', hi: '#ffffff' },
+    demi:    { edge: '#2a140c', body: '#5a2c17', hi: '#8f5a39' }
+  };
+
+  const stage = document.getElementById('stage');
+  const baseC = document.getElementById('base');
+  const inkC  = document.getElementById('ink');
+  const liveC = document.getElementById('live');
+  const baseX = baseC.getContext('2d');
+  const inkX  = inkC.getContext('2d');
+  const liveX = liveC.getContext('2d');
+  const hint  = document.getElementById('hint');
+  const undoB = document.getElementById('undo');
+  const clearB = document.getElementById('clear');
+
+  let sauceKey = 'ketchup';
+  let size = 14;
+  let strokes = [];
+  let clearedBackup = null;
+  let current = null;
+  let scale = 1;
+
+  /* ---------- scene ---------- */
+  function omeletPath(c) {
+    c.beginPath();
+    c.moveTo(195, 385);
+    c.bezierCurveTo(250, 185, 750, 185, 805, 385);
+    c.bezierCurveTo(750, 590, 250, 590, 195, 385);
+    c.closePath();
+  }
+  function plateClip(c) {
+    c.beginPath();
+    c.ellipse(500, 380, 392, 256, 0, 0, Math.PI * 2);
+    c.clip();
+  }
+
+  function drawBase() {
+    const c = baseX;
+    c.setTransform(scale, 0, 0, scale, 0, 0);
+    c.clearRect(0, 0, W, H);
+
+    // gingham tablecloth
+    c.fillStyle = '#f7faff';
+    c.fillRect(0, 0, W, H);
+    c.fillStyle = 'rgba(110,155,215,0.32)';
+    for (let x = 0; x < W; x += 50) c.fillRect(x, 0, 25, H);
+    for (let y = 0; y < H; y += 50) c.fillRect(0, y, W, 25);
+
+    // plate
+    c.save();
+    c.shadowColor = 'rgba(30,45,80,0.30)';
+    c.shadowBlur = 36;
+    c.shadowOffsetY = 16;
+    const pg = c.createLinearGradient(0, 80, 0, 680);
+    pg.addColorStop(0, '#ffffff');
+    pg.addColorStop(1, '#e9edf3');
+    c.fillStyle = pg;
+    c.beginPath(); c.ellipse(500, 380, 450, 305, 0, 0, Math.PI * 2); c.fill();
+    c.restore();
+
+    c.strokeStyle = '#8fb0dc';
+    c.lineWidth = 4;
+    c.beginPath(); c.ellipse(500, 380, 428, 284, 0, 0, Math.PI * 2); c.stroke();
+
+    const wg = c.createLinearGradient(0, 120, 0, 640);
+    wg.addColorStop(0, '#eceff4');
+    wg.addColorStop(1, '#fbfcfd');
+    c.fillStyle = wg;
+    c.beginPath(); c.ellipse(500, 380, 396, 260, 0, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = '#dde2ea';
+    c.lineWidth = 3;
+    c.stroke();
+
+    // omelet: shadow, body
+    c.save();
+    c.shadowColor = 'rgba(120,70,0,0.35)';
+    c.shadowBlur = 26;
+    c.shadowOffsetY = 16;
+    c.fillStyle = '#ffd820';
+    omeletPath(c); c.fill();
+    c.restore();
+
+    c.save();
+    omeletPath(c); c.clip();
+
+    // base: buttery yellow
+    const eg = c.createLinearGradient(0, 190, 0, 590);
+    eg.addColorStop(0, '#fff47e');
+    eg.addColorStop(0.45, '#ffdf2b');
+    eg.addColorStop(1, '#f7bd10');
+    c.fillStyle = eg; c.fillRect(150, 150, 700, 480);
+
+    // warm roundness near the bottom edge (kept light so it stays yellow)
+    let rg = c.createRadialGradient(500, 620, 30, 500, 620, 340);
+    rg.addColorStop(0, 'rgba(225,120,0,0.22)');
+    rg.addColorStop(1, 'rgba(225,120,0,0)');
+    c.fillStyle = rg; c.fillRect(150, 150, 700, 480);
+
+    // big soft light from the upper left
+    rg = c.createRadialGradient(420, 260, 10, 420, 260, 300);
+    rg.addColorStop(0, 'rgba(255,255,235,0.70)');
+    rg.addColorStop(1, 'rgba(255,255,235,0)');
+    c.fillStyle = rg; c.fillRect(150, 150, 700, 480);
+
+    // soft center fold
+    c.lineCap = 'round';
+    c.strokeStyle = 'rgba(214,150,0,0.22)';
+    c.lineWidth = 6;
+    c.beginPath(); c.moveTo(270, 400); c.bezierCurveTo(400, 340, 600, 340, 735, 400); c.stroke();
+    c.strokeStyle = 'rgba(255,255,230,0.55)';
+    c.lineWidth = 4;
+    c.beginPath(); c.moveTo(272, 391); c.bezierCurveTo(400, 331, 600, 331, 733, 391); c.stroke();
+
+    // gentle egg wrinkles
+    c.strokeStyle = 'rgba(214,150,0,0.16)';
+    c.lineWidth = 4;
+    [[310,300,420,262,540,274],[570,296,670,288,745,326],[330,480,450,528,610,516]].forEach(p => {
+      c.beginPath(); c.moveTo(p[0], p[1]); c.quadraticCurveTo(p[2], p[3], p[4], p[5]); c.stroke();
+    });
+
+    // glossy highlights (rotated soft ellipses)
+    const gloss = (x, y, rx, ry, rot, a) => {
+      c.save();
+      c.translate(x, y); c.rotate(rot); c.scale(1, ry / rx);
+      const g = c.createRadialGradient(0, 0, 0, 0, 0, rx);
+      g.addColorStop(0, 'rgba(255,255,255,' + a + ')');
+      g.addColorStop(0.6, 'rgba(255,255,255,' + (a * 0.45) + ')');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = g;
+      c.beginPath(); c.arc(0, 0, rx, 0, Math.PI * 2); c.fill();
+      c.restore();
+    };
+    gloss(400, 262, 130, 34, -0.18, 0.85);
+    gloss(640, 292, 70, 16, 0.22, 0.6);
+    gloss(520, 520, 120, 18, 0.04, 0.35);
+
+    // egg flecks and tiny golden-brown spots
+    let s = 11;
+    const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < 150; i++) {
+      const x = 200 + rnd() * 600, y = 190 + rnd() * 400, r = 1 + rnd() * 2.2;
+      const k = rnd();
+      c.fillStyle = k > 0.55 ? 'rgba(255,252,215,0.6)' : (k > 0.2 ? 'rgba(230,165,10,0.28)' : 'rgba(190,110,10,0.22)');
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
+    }
+    c.restore();
+
+    // rim of the omelet
+    c.strokeStyle = 'rgba(235,165,0,0.7)';
+    c.lineWidth = 3;
+    omeletPath(c); c.stroke();
+  }
+
+  /* ---------- ketchup rendering ---------- */
+  function renderStroke(c, st) {
+    const pts = st.pts, col = SAUCES[st.sauce];
+    if (!pts.length) return;
+    c.lineCap = 'round'; c.lineJoin = 'round';
+
+    if (pts.length === 1) {
+      const p = pts[0];
+      c.fillStyle = col.edge; c.beginPath(); c.arc(p.x, p.y, p.w * 0.75 + 2, 0, Math.PI * 2); c.fill();
+      c.fillStyle = col.body; c.beginPath(); c.arc(p.x, p.y, p.w * 0.75, 0, Math.PI * 2); c.fill();
+      c.fillStyle = col.hi;   c.beginPath(); c.arc(p.x - p.w * 0.22, p.y - p.w * 0.25, p.w * 0.18, 0, Math.PI * 2); c.fill();
+      return;
+    }
+    const pass = (color, grow, mul, ox, oy) => {
+      c.strokeStyle = color;
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i];
+        c.lineWidth = Math.max(1, ((a.w + b.w) / 2) * mul + grow);
+        c.beginPath();
+        c.moveTo(a.x + ox * a.w, a.y + oy * a.w);
+        c.lineTo(b.x + ox * b.w, b.y + oy * b.w);
+        c.stroke();
+      }
+    };
+    pass(col.edge, 3, 1, 0, 0);
+    pass(col.body, 0, 1, 0, 0);
+    pass(col.hi, 0, 0.26, -0.18, -0.2);
+  }
+
+  function clearCanvas(c, canvas) {
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
+    c.clearRect(0, 0, canvas.width, canvas.height);
+    c.restore();
+  }
+  function redrawInk() {
+    clearCanvas(inkX, inkC);
+    inkX.save();
+    inkX.setTransform(scale, 0, 0, scale, 0, 0);
+    plateClip(inkX);
+    strokes.forEach(st => renderStroke(inkX, st));
+    inkX.restore();
+  }
+  function redrawLive() {
+    clearCanvas(liveX, liveC);
+    if (!current) return;
+    liveX.save();
+    liveX.setTransform(scale, 0, 0, scale, 0, 0);
+    plateClip(liveX);
+    renderStroke(liveX, current);
+    liveX.restore();
+  }
+
+  /* ---------- sizing ---------- */
+  function resize() {
+    const rect = stage.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    scale = (rect.width / W) * dpr;
+    [baseC, inkC, liveC].forEach(cv => {
+      cv.width = Math.round(W * scale);
+      cv.height = Math.round(H * scale);
+    });
+    drawBase(); redrawInk(); redrawLive();
+  }
+  new ResizeObserver(resize).observe(stage);
+
+  /* ---------- input ---------- */
+  function toLogical(e) {
+    const r = liveC.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height, t: e.timeStamp };
+  }
+
+  function addPoint(e) {
+    const p = toLogical(e);
+    const last = current.pts[current.pts.length - 1];
+    const dx = p.x - last.x, dy = p.y - last.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 1.5) return;
+    const dt = Math.max(1, p.t - current.t);
+    const speed = dist / dt;                       // logical px per ms
+    const target = size * (1.5 - Math.min(speed, 1.5) * 0.6);
+    current.w += (target - current.w) * 0.25;
+    const k = 0.55;                                // low-pass smoothing
+    current.pts.push({ x: last.x + dx * k, y: last.y + dy * k, w: current.w });
+    current.t = p.t;
+  }
+
+  liveC.addEventListener('pointerdown', e => {
+    if (e.button !== undefined && e.button > 0) return;
+    liveC.setPointerCapture(e.pointerId);
+    const p = toLogical(e);
+    current = { sauce: sauceKey, pts: [{ x: p.x, y: p.y, w: size * 1.4 }], w: size * 1.4, t: p.t };
+    hint.classList.add('gone');
+    redrawLive();
+  });
+  liveC.addEventListener('pointermove', e => {
+    if (!current) return;
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    (evs.length ? evs : [e]).forEach(addPoint);
+    redrawLive();
+  });
+  const end = () => {
+    if (!current) return;
+    strokes.push(current);
+    clearedBackup = null;
+    current = null;
+    clearCanvas(liveX, liveC);
+    redrawInk();
+    syncButtons();
+  };
+  liveC.addEventListener('pointerup', end);
+  liveC.addEventListener('pointercancel', end);
+
+  /* ---------- controls ---------- */
+  function syncButtons() {
+    undoB.disabled = !(strokes.length || clearedBackup);
+    clearB.disabled = !strokes.length;
+  }
+  function undo() {
+    if (strokes.length) strokes.pop();
+    else if (clearedBackup) { strokes = clearedBackup; clearedBackup = null; }
+    redrawInk(); syncButtons();
+  }
+  undoB.addEventListener('click', undo);
+  clearB.addEventListener('click', () => {
+    clearedBackup = strokes; strokes = [];
+    redrawInk(); syncButtons();
+  });
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+  });
+
+  document.querySelectorAll('.sauce').forEach(b => b.addEventListener('click', () => {
+    sauceKey = b.dataset.sauce;
+    document.querySelectorAll('.sauce').forEach(x => x.setAttribute('aria-pressed', x === b));
+  }));
+  document.getElementById('size').addEventListener('input', e => { size = +e.target.value; });
+
+  document.getElementById('save').addEventListener('click', () => {
+    const t = document.createElement('canvas');
+    t.width = baseC.width; t.height = baseC.height;
+    const c = t.getContext('2d');
+    c.drawImage(baseC, 0, 0);
+    c.drawImage(inkC, 0, 0);
+    const a = document.createElement('a');
+    a.download = 'omurice-art.png';
+    a.href = t.toDataURL('image/png');
+    a.click();
+  });
+
+  resize();
+})();
+</script>
+</body>
+</html>
